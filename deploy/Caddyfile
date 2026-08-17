@@ -1,0 +1,17 @@
+:80 {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+	}
+
+	handle /api/v1/readyz {
+		respond 404
+	}
+	handle /api/v1/* {
+		reverse_proxy app:8000
+	}
+	handle {
+		respond 404
+	}
+}

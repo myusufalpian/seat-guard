@@ -1,0 +1,15 @@
+node_modules
+vendor
+.env
+.env.docker
+frankenphp
+storage/logs
+docs
+.git
+.github
+.ai
+.agents
+.claude
+.codex
+tests
+*.log
