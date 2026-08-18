@@ -1,0 +1,95 @@
+{
+  "realm": "seatguard",
+  "enabled": true,
+  "accessTokenLifespan": 900,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "sslRequired": "none",
+  "bruteForceProtected": true,
+  "passwordPolicy": "length(8) and notUsername",
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "customer" },
+      { "name": "event_admin" },
+      { "name": "super_admin" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "seatguard-web",
+      "name": "SeatGuard Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8000",
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "client.introspection.basic.auth": "false"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "customer",
+      "email": "customer@seatguard.dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "customer123", "temporary": false }
+      ],
+      "realmRoles": ["customer"]
+    },
+    {
+      "username": "eventadmin",
+      "email": "eventadmin@seatguard.dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "eventadmin123", "temporary": false }
+      ],
+      "realmRoles": ["event_admin"]
+    },
+    {
+      "username": "superadmin",
+      "email": "superadmin@seatguard.dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "superadmin123", "temporary": false }
+      ],
+      "realmRoles": ["super_admin"],
+      "requiredActions": ["CONFIGURE_TOTP"]
+    }
+  ]
+}

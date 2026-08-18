@@ -1,0 +1,170 @@
+name: seatguard
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env.docker
+  volumes:
+    - storage-data:/app/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  migrate:
+    <<: *app-base
+    restart: "no"
+    environment:
+      DB_USERNAME: seatguard
+      DB_PASSWORD: seatguard
+    command: ["sh", "-c", "php artisan config:cache && php artisan route:cache && php artisan migrate --force"]
+  app:
+    <<: *app-base
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["sh", "-c", "php artisan config:cache && php artisan route:cache && php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000 --admin-port=2019 --workers=2 --max-requests=500"]
+
+  worker:
+    <<: *app-base
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'queue:work' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["sh", "-c", "php artisan config:cache && php artisan route:cache && php artisan queue:work --queue=critical,default --tries=3"]
+
+  scheduler:
+    <<: *app-base
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'schedule:work' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["sh", "-c", "php artisan config:cache && php artisan route:cache && php artisan schedule:work"]
+
+  lb:
+    image: caddy:2-alpine
+    ports:
+      - "${LB_PORT:-8081}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/api/v1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: seatguard
+      POSTGRES_USER: seatguard
+      POSTGRES_PASSWORD: seatguard
+    command:
+      - postgres
+      - -c
+      - log_lock_waits=on
+      - -c
+      - max_connections=100
+      - -c
+      - lock_timeout=2s
+      - -c
+      - statement_timeout=3s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatguard -d seatguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  keycloak-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloakdbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_URL: http://localhost:8080
+    volumes:
+      - ./deploy/keycloak/realm-seatguard.json:/opt/keycloak/data/import/realm-seatguard.json:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  storage-data:
+  pgdata:
+  redisdata:
+  keycloakdbdata:

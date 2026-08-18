@@ -9,6 +9,54 @@
 
 ## About Laravel
 
+# SeatGuard
+
+Concurrent-safe seat booking system — showcase: zero double booking under
+concurrent, multi-instance load. Docs: `docs/PRD-v1.1.md`,
+`docs/rfc/RFC-001-concurrent-safe-booking.md`, backlog `docs/tasks/`.
+
+## Quickstart (Docker)
+
+```bash
+docker compose up --build
+# LB + 3 app instances:  http://localhost/healthz
+# Keycloak admin:        http://localhost:8080 (admin/admin)
+# Mailpit:               http://localhost:8025
+```
+
+Demo users (realm `seatguard`): `customer/customer123`,
+`eventadmin/eventadmin123`, `superadmin/superadmin123`.
+
+> Keycloak `--import-realm` hanya meng-import realm yang belum ada. Setelah
+> mengedit `deploy/keycloak/realm-seatguard.json`, reset realm:
+> `make keycloak-realm-reset` (atau
+> `docker compose down keycloak keycloak-db && docker volume rm seatguard_keycloakdbdata
+> && docker compose up -d keycloak`).
+
+### Deployment checklist (VPS/demo publik)
+
+Sebelum demo publik, aktifkan:
+
+1. **TLS & HSTS** — Caddy: ganti `:80` dengan domain (`example.com { ... }`); Caddy
+   auto-issue cert. Tambah `Strict-Transport-Security "max-age=31536000; includeSubDomains"`.
+2. **TLS antar-service** — postgres `ssl=on` + cert; `KEYCLOAK_BASE_URL=https`.
+3. **APP_KEY via secret** (bukan bake image): inject env saat `docker compose up`.
+4. **Rate-limit per-IP** aktif penuh (TrustProxies sudah dikonfigurasi, `TRUSTED_PROXIES`).
+
+## Local dev
+
+```bash
+composer install
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+php artisan test          # Pest
+vendor/bin/pint --dirty   # format
+vendor/bin/phpstan analyse --memory-limit=1G
+php artisan octane:start  # FrankenPHP worker mode
+```
+
+---
+
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
 - [Simple, fast routing engine](https://laravel.com/docs/routing).
